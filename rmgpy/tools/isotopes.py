@@ -272,8 +272,9 @@ def generate_isotopomers(spc, N=1):
                 break
         if unique: filtered.append(candidate)
 
-    for isotopomer in filtered:
-        correct_entropy(isotopomer, spc)
+    if spc.thermo:
+        for isotopomer in filtered:
+            correct_entropy(isotopomer, spc)
 
     return filtered
 
