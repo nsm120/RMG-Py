@@ -231,6 +231,20 @@ entry(
 )
 
 entry(
+    index = 62,
+    label = "C/H4",
+    group =
+"""
+1 *1 C  u0 {2,S} {3,S} {4,S} {5,S}
+2 *2 H  u0 {1,S}
+3    H  u0 {1,S}
+4    H  u0 {1,S}
+5    H  u0 {1,S}
+""",
+    kinetics = None,
+)
+
+entry(
     index = 63,
     label = "C/H3/Cs",
     group = 
@@ -289,6 +303,7 @@ L1: X_H_or_Xrad_H_Xbirad_H_Xtrirad_H
         L3: C/H3/Cs
         L3: C/H3/Cdot
         L3: C/H3/Cd
+        L3: C/H4
 L1: Y_rad_birad_trirad_quadrad
     L2: Y_1centerquadrad
         L3: C_quintet
