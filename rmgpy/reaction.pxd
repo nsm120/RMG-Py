@@ -54,6 +54,7 @@ cdef class Reaction:
     cdef public bint elementary_high_p
     cdef public str comment
     cdef public dict k_effective_cache
+    cdef public bint allow_max_rate_violation
     
     cpdef bint isIsomerization(self)
 

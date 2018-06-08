@@ -104,6 +104,7 @@ class Reaction:
                  pairs=None,
                  allow_pdep_route=False,
                  elementary_high_p=False,
+                 allow_max_rate_violation=False,
                  comment='',
                  ):
         self.index = index
@@ -122,6 +123,7 @@ class Reaction:
         self.elementary_high_p = elementary_high_p
         self.comment = comment
         self.k_effective_cache = {}
+        self.allow_max_rate_violation = allow_max_rate_violation
 
     def __repr__(self):
         """
