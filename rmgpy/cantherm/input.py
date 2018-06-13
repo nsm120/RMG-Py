@@ -124,7 +124,8 @@ def species(label, *args, **kwargs):
             else:
                 raise TypeError('species() got an unexpected keyword argument {0!r}.'.format(key))
             
-        if structure: spec.molecule = [structure]
+        if structure:
+            spec.molecule = [structure]
         spec.conformer = Conformer(E0=E0, modes=modes, spinMultiplicity=spinMultiplicity, opticalIsomers=opticalIsomers)
         spec.molecularWeight = molecularWeight
         spec.transportData = collisionModel
@@ -389,6 +390,8 @@ def loadInputFile(path):
             raise
 
     modelChemistry = local_context.get('modelChemistry', '')
+    levelOfTheory = local_context.get('levelOfTheory', '')
+    author = local_context.get('author', '')
     if 'frequencyScaleFactor' not in local_context:
         logging.debug('Assigning a frequencyScaleFactor according to the modelChemistry...')
         frequencyScaleFactor = assign_frequency_scale_factor(modelChemistry)
@@ -409,6 +412,15 @@ def loadInputFile(path):
             job.includeHinderedRotors = useHinderedRotors
             job.applyAtomEnergyCorrections = useAtomCorrections
             job.applyBondEnergyCorrections = useBondCorrections
+            job.atomEnergies = atomEnergies
+        if isinstance(job, ThermoJob):
+            job.modelChemistry = modelChemistry
+            job.frequencyScaleFactor = frequencyScaleFactor
+            job.levelOfTheory = levelOfTheory
+            job.author = author
+            job.useHinderedRotors = useHinderedRotors
+            job.useAtomCorrections = useAtomCorrections
+            job.useBondCorrections = useBondCorrections
             job.atomEnergies = atomEnergies
     
     return jobList
