@@ -37,6 +37,7 @@ import os.path
 import numpy as np
 import logging
 import string
+import time
 
 import rmgpy.constants as constants
 from rmgpy.cantherm.output import prettify
@@ -54,6 +55,7 @@ from rmgpy.chemkin import writeThermoEntry
 from rmgpy.species import Species
 from rmgpy.molecule import Molecule
 from rmgpy.molecule.util import retrieveElementCount
+from rmgpy.molecule.translator import toInChI, toInChIKey
 
 ################################################################################
 
@@ -74,7 +76,11 @@ class ThermoJob(object):
         """
         self.generateThermo()
         if outputFile is not None:
-            self.save(outputFile)
+            chem_string = self.save(outputFile)
+            if isinstance(self.species, Species):
+                # Save the ThermoCentralDatabase file for the species.
+                # Don't generate a database file for TransitionStates
+                self.save_species_to_database_file(path=os.path.dirname(outputFile), chem_string=chem_string)
             if plot:
                 self.plot(os.path.dirname(outputFile))
     
@@ -160,8 +166,8 @@ class ThermoJob(object):
             f.write('#    {0:11g} {1:11.3f} {2:11.3f} {3:11.3f} {4:11.3f}\n'.format(T, Cp, H, S, G))
         f.write('#    =========== =========== =========== =========== ===========\n')
         
-        string = 'thermo(label={0!r}, thermo={1!r})'.format(species.label, species.getThermoData())
-        f.write('{0}\n\n'.format(prettify(string)))
+        result = 'thermo(label={0!r}, thermo={1!r})'.format(species.label, species.getThermoData())
+        f.write('{0}\n\n'.format(prettify(result)))
         
         f.close()
         # write chemkin file
@@ -176,8 +182,8 @@ class ThermoJob(object):
                     elementCounts = {'C': 0, 'H': 0}
         else:
             elementCounts = {'C': 0, 'H': 0}
-        string = writeThermoEntry(species, elementCounts=elementCounts, verbose=False)
-        f.write('{0}\n'.format(string))
+        chem_string = writeThermoEntry(species, elementCounts=elementCounts, verbose=False)
+        f.write('{0}\n'.format(chem_string))
         f.close()
 
         # write species dictionary
@@ -187,6 +193,73 @@ class ThermoJob(object):
                 f.write(species.molecule[0].toAdjacencyList(removeH=False,label=species.label))
                 f.write('\n')
         f.close()
+
+        return chem_string
+
+    def save_species_to_database_file(self, path, chem_string):
+        """
+        Save the species with all statMech data to a database file
+        """
+        if self.species.molecule is None or len(self.species.molecule) == 0:
+            logging.info("Not generating database file for species {0}, since its structure wasn't"
+                         " specified".format(self.species.label))
+        else:
+            time_stamp = str(time.time())
+            try:
+                inchi = toInChI(self.species.molecule[0], backend='try-all', aug_level=0)
+            except ValueError:
+                inchi = ''
+            try:
+                inchi_key = toInChIKey(self.species.molecule[0], backend='try-all', aug_level=0)
+            except ValueError:
+                inchi_key = ''
+
+            space = '\n                               '
+            dictionary = 'cantherm_species_dictionary = {'
+            dictionary += "'label': {0!r},{14}'date': {1!r},{14}'timestamp': {2!r},{14}'author': {3!r}," \
+                          "{14}'SMILES': {4!r},{14}'adjacencyList': {5!r},{14}'InChI': {6!r},{14}'InChIKey': {7!r}," \
+                          "{14}'levelOfTheory': {8!r},{14}'modelChemistry': {9!r},{14}'frequencyScaleFactor': {10!r}," \
+                          "{14}'HinderedRotors': {11!r},{14}'AtomCorrections': {12!r}," \
+                          "{14}'BondCorrections': {13!r},".format(
+                self.species.label, time.strftime("%Y-%m-%d %H:%M"), time_stamp, self.author,
+                self.species.molecule[0].toSMILES(), self.species.molecule[0].toAdjacencyList(), inchi, inchi_key,
+                self.levelOfTheory, self.modelChemistry, self.frequencyScaleFactor, self.useHinderedRotors,
+                self.useAtomCorrections, self.useBondCorrections, space)
+            if self.atomEnergies is not None:
+                dictionary += "{0}'atomEnergies': {1!r},".format(space, self.atomEnergies)
+            dictionary += '\n}\n\n'
+
+            species_object = 'CanthermSpecies(label={0!r}, SMILES={1!r}, adjacencyList={2!r}, InChI={3!r},' \
+                             'conformer={4!r}, thermo={5!r}, '.format(
+                self.species.label,
+                self.species.molecule[0].toSMILES(),
+                self.species.molecule[0].toAdjacencyList(),
+                inchi,
+                self.species.conformer,
+                self.species.thermo,
+            )
+            if self.species.symmetryNumber != -1:
+                species_object += 'symmetryNumber={0!r}, '.format(self.species.symmetryNumber)
+            else:
+                species_object += 'symmetryNumber = 1, '
+            if self.species.transportData is not None:
+                species_object += 'collisionModel={0!r}, '.format(self.species.transportData)
+            if self.species.molecularWeight is not None:
+                species_object += 'molecularWeight={0!r}, '.format(self.species.molecularWeight)
+            if self.species.energyTransferModel is not None:
+                species_object += 'energyTransferModel={0!r}, '.format(self.species.energyTransferModel)
+            species_object += 'chemkin_thermo_string={0!r})'.format(chem_string)
+
+            if not os.path.exists(os.path.join(os.path.abspath(path),'SpeciesDatabase','')):
+                os.mkdir(os.path.join(os.path.abspath(path),'SpeciesDatabase',''))
+            valid_chars = "-_.()<=>+ %s%s" % (string.ascii_letters, string.digits)
+            filename = os.path.join('SpeciesDatabase',
+                                    ''.join(c for c in self.species.label if c in valid_chars) + '.py')
+            full_path = os.path.join(path, filename)
+            with open(full_path, 'w') as f:
+                f.write(dictionary)
+                f.write(prettify(species_object))
+                f.write('\n')
 
     def plot(self, outputDirectory):
         """
