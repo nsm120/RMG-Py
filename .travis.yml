@@ -21,6 +21,9 @@ before_install:
   - conda info -a
   # Clone RMG-database
   - git clone https://github.com/ReactionMechanismGenerator/RMG-database.git
+  - cd RMG-database
+  - git checkout max_viol
+  - cd ..
   - cd RMG-Py
 
 install:
