@@ -181,6 +181,7 @@ class StatMechJob(object):
         self.applyAtomEnergyCorrections = True
         self.applyBondEnergyCorrections = True
         self.atomEnergies = None
+        self.load_species_from_database = False
     
     def execute(self, outputFile=None, plot=False):
         """
@@ -188,10 +189,11 @@ class StatMechJob(object):
         given `outputFile` on disk.
         """
         self.load()
-        if outputFile is not None:
-            self.save(outputFile=outputFile)
-        logging.debug('Finished statmech job for species {0}.'.format(self.species))
-        logging.debug(repr(self.species))
+        if not self.load_species_from_database:
+            if outputFile is not None:
+                self.save(outputFile=outputFile)
+            logging.debug('Finished statmech job for species {0}.'.format(self.species))
+            logging.debug(repr(self.species))
     
     def load(self):
         """
@@ -225,6 +227,10 @@ class StatMechJob(object):
         directory = os.path.abspath(os.path.dirname(path))
     
         with open(path, 'r') as f:
+            line = f.readline()
+            if 'cantherm_species_dictionary' in line:
+                self.load_species_from_database = True
+                return
             try:
                 exec f in global_context, local_context
             except (NameError, TypeError, SyntaxError), e:

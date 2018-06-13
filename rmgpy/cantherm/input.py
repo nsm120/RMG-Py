@@ -35,7 +35,10 @@ This module contains functionality for parsing CanTherm input files.
 import os.path
 import logging
 
+from rmgpy.quantity import Quantity
+import rmgpy.constants as constants
 from rmgpy.species import Species, TransitionState
+from rmgpy.molecule.element import getElement
 
 from rmgpy.statmech.translation import Translation, IdealGasTranslation
 from rmgpy.statmech.rotation import Rotation, LinearRotor, NonlinearRotor, KRotor, SphericalTopRotor
@@ -424,3 +427,101 @@ def loadInputFile(path):
             job.atomEnergies = atomEnergies
     
     return jobList
+
+
+def load_species_from_database_file(job):
+    """
+    Load the species with all statMech data from a database file
+    """
+    global speciesDict
+
+    with open(job.path, 'r') as f:
+        line = f.readline()
+        source = 'spc = '
+        read = False
+        while line:
+            if 'CanthermSpecies' in line:
+                read = True
+            if read:
+                source += str(line)
+            line = f.readline()
+
+    spc = CanthermSpecies()  # this is done only to satisfy automatic code checking tools, it is meaningless
+    codeobj = compile(source, str(f), 'exec')
+    exec(codeobj)  # this created an CanthermSpecies object instance named spc
+
+    if spc.label is None:
+        raise ValueError('No label entered for species')
+    if spc.label != job.species.label:
+        logging.debug('ignoring CanthermSpecies label {0} from database input file, using the user supplied'
+                      ' label {1} instead'.format(spc.label, job.species.label))
+        spc.label = job.species.label
+    if spc.conformer is None:
+        raise ValueError('No conformer entered for species {0}'.format(spc.label))
+    if spc.conformer.E0 is None:
+        raise ValueError('No E0 entered for conformer of species {0}'.format(spc.label))
+    if spc.conformer.modes is None:
+        raise ValueError('No modes entered for conformer of species {0}'.format(spc.label))
+    if spc.molecularWeight is None:
+        if spc.conformer.number is None:
+            raise ValueError('No molecularWeight entered for species {0}, and it cannot be reconstructed from'
+                             ' conformer.number'.format(spc.label))
+        else:
+            spc.molecularWeight = Quantity(sum([getElement(int(element)).mass
+                                                for element in spc.conformer.number.value_si]), 'kg/mol')
+    else:
+        # convert molecularWeight to a Quantity object
+        spc.molecularWeight = Quantity(float(spc.molecularWeight[0] * constants.Na), spc.molecularWeight[1])
+    if spc.collisionModel is None:
+        raise ValueError('No collisionModel entered for species {0}'.format(spc.label))
+    if spc.energyTransferModel is None:
+        raise ValueError('No energyTransferModel entered for species {0}'.format(spc.label))
+    if spc.thermo is None:
+        raise ValueError('No thermo entered for species {0}'.format(spc.label))
+
+    structure = None
+    if spc.SMILES is not None:
+        structure = SMILES(spc.SMILES)
+    elif spc.adjacencyList is not None:
+        structure = adjacencyList(spc.adjacencyList)
+    elif spc.InChI is not None:
+        structure = InChI(spc.adjacencyList)
+    else:
+        logging.info('Cannot resolve structure for species {0}'.format(spc.label))
+
+    try:
+        dict_spc = speciesDict[spc.label]
+    except KeyError:
+        speciesDict[spc.label] = spc
+        dict_spc = speciesDict[spc.label]
+
+    if structure:
+        dict_spc.molecule = [structure]
+        dict_spc.conformer = spc.conformer
+    dict_spc.molecularWeight = spc.molecularWeight
+    dict_spc.transportData = spc.collisionModel
+    dict_spc.energyTransferModel = spc.energyTransferModel
+    dict_spc.thermo = spc.thermo
+    job.species = dict_spc
+
+    logging.info('Successfully read statistical mechanics parameters for species {0} from database file'.format(
+        spc.label))
+
+
+class CanthermSpecies(object):
+    """
+    A class for parsing species database files
+    """
+    def __init__(self, label='', SMILES='', adjacencyList='', InChI='', conformer=None, thermo=None, symmetryNumber=1,
+                 collisionModel=None, molecularWeight=None, energyTransferModel=None, chemkin_thermo_string=''):
+        self.label = label
+        self.SMILES = SMILES
+        self.adjacencyList = adjacencyList
+        self.InChI = InChI
+        self.conformer = conformer
+        self.thermo = thermo
+        self.symmetryNumber = symmetryNumber
+        self.collisionModel = collisionModel
+        self.molecularWeight = molecularWeight
+        self.energyTransferModel = energyTransferModel
+        self.chemkin_thermo_string = chemkin_thermo_string

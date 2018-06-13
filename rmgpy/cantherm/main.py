@@ -47,7 +47,7 @@ except ImportError:
 
 from rmgpy.chemkin import writeElementsSection, writeThermoEntry, writeKineticsEntry
 
-from rmgpy.cantherm.input import loadInputFile
+from rmgpy.cantherm.input import loadInputFile, load_species_from_database_file
 
 from rmgpy.cantherm.kinetics import KineticsJob
 from rmgpy.cantherm.statmech import StatMechJob
@@ -217,7 +217,6 @@ class CanTherm:
         Execute, in order, the jobs found in input file specified by the
         `inputFile` attribute.
         """
-        
         # Initialize the logging system (both to the console and to a file in the
         # output directory)
         self.initializeLog(self.verbose, os.path.join(self.outputDirectory, 'cantherm.log'))
@@ -257,6 +256,9 @@ class CanTherm:
         for job in self.jobList:
             if isinstance(job,ThermoJob) or isinstance(job, StatMechJob):
                 job.execute(outputFile=outputFile, plot=self.plot)
+                if isinstance(job, StatMechJob) and job.load_species_from_database:
+                    # load the species from the database file
+                    load_species_from_database_file(job)
 
         with open(chemkinFile, 'a') as f:
             f.write('\n')
