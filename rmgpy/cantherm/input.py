@@ -130,6 +130,13 @@ def species(label, *args, **kwargs):
         if structure:
             spec.molecule = [structure]
         spec.conformer = Conformer(E0=E0, modes=modes, spinMultiplicity=spinMultiplicity, opticalIsomers=opticalIsomers)
+        if molecularWeight is None:
+            if structure is None:
+                raise ValueError("No molecularWeight was entered for species {0}. Since the structure wasn't given as"
+                                 " well, the molecularWeight cannot be reconstructed!".format(spec.label))
+            else:
+                molecularWeight = Quantity(sum([getElement(int(atom.number)).mass
+                                                for atom in spec.molecule[0].atoms]), 'kg/mol')
         spec.molecularWeight = molecularWeight
         spec.transportData = collisionModel
         spec.energyTransferModel = energyTransferModel
